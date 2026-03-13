@@ -48,7 +48,10 @@ def create_app():
     db.init_app(app)
     Migrate(app, db)
     JWTManager(app)
-    CORS(app, origins="*", supports_credentials=False,
+    client_url = os.getenv("CLIENT_URL", "http://localhost:5173").strip().rstrip("/")
+    CORS(app,
+         origins=[client_url, "http://localhost:5173", "http://localhost:3000"],
+         supports_credentials=True,
          allow_headers=["Content-Type", "Authorization"],
          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     )
