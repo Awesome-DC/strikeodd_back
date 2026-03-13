@@ -18,14 +18,30 @@ from app.crash_engine import engine as crash_engine  # starts engine thread
 
 load_dotenv()
 
+def get_database_url():
+    url = os.getenv("DATABASE_URL", "")
+    if not url:
+        # Local fallback — SQLite
+        base_dir = os.path.abspath(os.path.dirname(__file__))
+        db_path = os.path.join(base_dir, '..', 'strikeodds.db')
+        return f"sqlite:///{db_path}"
+    # Render (and older Heroku) give postgres:// — SQLAlchemy needs postgresql://
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    return url
+
 def create_app():
     app = Flask(__name__)
 
-    # SQLite config — file will be created automatically in backend folder
-    base_dir = os.path.abspath(os.path.dirname(__file__))
-    db_path = os.path.join(base_dir, '..', 'strikeodds.db')
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", f"sqlite:///{db_path}")
+    app.config["SQLALCHEMY_DATABASE_URI"] = get_database_url()
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "pool_pre_ping": True,       # drop stale connections automatically
+        "pool_recycle": 300,         # recycle connections every 5 min
+        "connect_args": {} if get_database_url().startswith("sqlite") else {
+            "sslmode": "require"     # Render requires SSL for Postgres
+        }
+    }
     app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me")
 
     # Extensions
@@ -35,14 +51,14 @@ def create_app():
     CORS(app, origins=[os.getenv("CLIENT_URL", "http://localhost:5173")], supports_credentials=True)
 
     # Register blueprints
-    app.register_blueprint(auth_bp,   url_prefix="/api/auth")
-    app.register_blueprint(events_bp, url_prefix="/api/events")
-    app.register_blueprint(bets_bp,   url_prefix="/api/bets")
-    app.register_blueprint(users_bp,  url_prefix="/api/users")
-    app.register_blueprint(sports_bp, url_prefix="/api/sports")
+    app.register_blueprint(auth_bp,     url_prefix="/api/auth")
+    app.register_blueprint(events_bp,   url_prefix="/api/events")
+    app.register_blueprint(bets_bp,     url_prefix="/api/bets")
+    app.register_blueprint(users_bp,    url_prefix="/api/users")
+    app.register_blueprint(sports_bp,   url_prefix="/api/sports")
     app.register_blueprint(withdraw_bp, url_prefix="/api/withdraw")
-    app.register_blueprint(deposit_bp, url_prefix="/api/deposit")
-    app.register_blueprint(crash_bp,   url_prefix="/api/crash")
+    app.register_blueprint(deposit_bp,  url_prefix="/api/deposit")
+    app.register_blueprint(crash_bp,    url_prefix="/api/crash")
 
     # Health check
     @app.get("/api/health")
