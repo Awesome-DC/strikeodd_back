@@ -48,21 +48,7 @@ def create_app():
     db.init_app(app)
     Migrate(app, db)
     JWTManager(app)
-    # Build allowed origins list — always include localhost for dev
-    client_url = os.getenv("CLIENT_URL", "").strip().rstrip("/")
-    allowed_origins = [
-        "http://localhost:5173",
-        "http://localhost:3000",
-    ]
-    if client_url:
-        allowed_origins.append(client_url)
-        # Also allow with/without www and any vercel preview URLs
-        if "vercel.app" in client_url:
-            allowed_origins.append(client_url.replace("https://", "https://www."))
-
-    CORS(app,
-         origins=allowed_origins,
-         supports_credentials=True,
+    CORS(app, origins="*", supports_credentials=False,
          allow_headers=["Content-Type", "Authorization"],
          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     )
@@ -76,6 +62,17 @@ def create_app():
     app.register_blueprint(withdraw_bp, url_prefix="/api/withdraw")
     app.register_blueprint(deposit_bp,  url_prefix="/api/deposit")
     app.register_blueprint(crash_bp,    url_prefix="/api/crash")
+
+    # Handle preflight OPTIONS requests globally
+    @app.before_request
+    def handle_options():
+        from flask import request, Response
+        if request.method == "OPTIONS":
+            res = Response()
+            res.headers["Access-Control-Allow-Origin"] = "*"
+            res.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+            res.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+            return res, 200
 
     # Health check
     @app.get("/api/health")
