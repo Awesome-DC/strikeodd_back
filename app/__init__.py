@@ -77,6 +77,10 @@ def create_app():
             res.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
             return res, 200
 
+    # Auto-create all tables on startup (safe — won't drop existing data)
+    with app.app_context():
+        db.create_all()
+
     # Health check
     @app.get("/api/health")
     def health():
