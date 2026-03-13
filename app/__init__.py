@@ -20,14 +20,15 @@ load_dotenv()
 
 def get_database_url():
     url = os.getenv("DATABASE_URL", "")
+
     if not url:
-        # Local fallback — SQLite
         base_dir = os.path.abspath(os.path.dirname(__file__))
-        db_path = os.path.join(base_dir, '..', 'strikeodds.db')
+        db_path = os.path.join(base_dir, "..", "strikeodds.db")
         return f"sqlite:///{db_path}"
-    # Render (and older Heroku) give postgres:// — SQLAlchemy needs postgresql://
+
     if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql://", 1)
+        url = url.replace("postgres://", "postgresql+psycopg2://", 1)
+
     return url
 
 def create_app():
