@@ -72,9 +72,34 @@ def create_app():
     app.register_blueprint(crash_bp,      url_prefix="/api/crash")
     app.register_blueprint(referral_bp,   url_prefix="/api/referral")
 
-    # ── Auto-create tables ──
+    # ── Auto-create tables + safe column migrations ──
     with app.app_context():
         db.create_all()
+        # Safely add new columns if they don't exist (PostgreSQL)
+        try:
+            from sqlalchemy import text
+            with db.engine.connect() as conn:
+                # Check and add new User columns
+                for col, typ in [
+                    ("bonus_balance", "FLOAT DEFAULT 0"),
+                    ("ref_code",      "VARCHAR(20)"),
+                    ("referred_by",   "VARCHAR"),
+                ]:
+                    try:
+                        conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {typ}"))
+                        conn.commit()
+                        print(f"✅ Added column users.{col}")
+                    except Exception:
+                        conn.rollback()  # column already exists — fine
+                # Check and add balance_type to transactions
+                try:
+                    conn.execute(text("ALTER TABLE transactions ADD COLUMN balance_type VARCHAR(10) DEFAULT 'main'"))
+                    conn.commit()
+                    print("✅ Added column transactions.balance_type")
+                except Exception:
+                    conn.rollback()
+        except Exception as e:
+            print(f"Migration note: {e}")
 
     # ── Unified Telegram webhook (deposit + withdrawal callbacks) ──
     @app.post("/api/telegram-webhook")
