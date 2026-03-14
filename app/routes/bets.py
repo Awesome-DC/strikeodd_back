@@ -107,9 +107,12 @@ def virtual_bet_result():
 
     elif is_stake_deduct:
         if use_bonus:
-            if stake <= 0 or user.bonus_balance < stake:
+            # Round both to 2dp to avoid float precision issues (e.g. 299.999 < 300)
+            bonus_bal = round(user.bonus_balance or 0, 2)
+            stake_r   = round(stake, 2)
+            if stake_r <= 0 or bonus_bal < stake_r:
                 return jsonify({"error": "Insufficient bonus balance"}), 400
-            user.bonus_balance = round(user.bonus_balance - stake, 2)
+            user.bonus_balance = round(bonus_bal - stake_r, 2)
             db.session.add(Transaction(
                 user_id=user_id, type="BET_PLACED", amount=-stake,
                 reference=f"{game_name} Bet (bonus) — {round_id}",
