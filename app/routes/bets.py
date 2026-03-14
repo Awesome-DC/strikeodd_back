@@ -79,7 +79,7 @@ def virtual_bet_result():
     is_win_only  = round_id.startswith(("av_win_","dice_win_","mines_win_","pk_win_","slot_win_",
                                          "bottle_win_","plinko_win_","coin_win_","wheel_win_",
                                          "hilo_win_","keno_win_","tower_win_","roulette_win_",
-                                         "bj_win_","crash_mp_win_"))
+                                         "bj_win_","crash_mp_win_", "shell_win_"))
     is_stake_deduct = round_id.startswith("stake_deduct_") or stake > 0
 
     game_name = _game_name(round_id)
@@ -151,6 +151,7 @@ def _game_name(round_id):
         ("plinko_","Plinko"),("coin_","Coin Flip"),("wheel_","Wheel of Fortune"),
         ("hilo_","Hi-Lo"),("keno_","Keno"),("tower_","Tower Climb"),
         ("roulette_","Roulette"),("bj_","Blackjack"),("crash_mp_","Crash Live"),
+        ("shell_","Shell Game"),
     ]:
         if prefix in round_id:
             return name
