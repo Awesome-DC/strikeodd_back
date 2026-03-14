@@ -11,7 +11,7 @@ from app.routes.events import events_bp
 from app.routes.bets import bets_bp
 from app.routes.users import users_bp
 from app.routes.sports import sports_bp
-from app.routes.withdraw import withdraw_bp
+from app.routes.withdraw import withdraw_bp, withdrawal_telegram_webhook
 from app.routes.deposit import deposit_bp
 from app.routes.crash import crash_bp
 from app.crash_engine import engine as crash_engine
@@ -80,5 +80,27 @@ def create_app():
     @app.get("/api/health")
     def health():
         return {"status": "ok"}
+
+    @app.get("/api/setup-webhook")
+    def setup_webhook():
+        """Call this once to register Telegram webhook: GET /api/setup-webhook"""
+        import os
+        try:
+            import requests as r
+        except ImportError:
+            return {"error": "requests not installed"}, 500
+        token    = os.getenv("TELEGRAM_BOT_TOKEN","").strip()
+        base_url = os.getenv("RAILWAY_PUBLIC_DOMAIN") or os.getenv("PUBLIC_URL","")
+        if not base_url:
+            return {"error": "Set RAILWAY_PUBLIC_DOMAIN or PUBLIC_URL env var"}, 400
+        if not base_url.startswith("http"):
+            base_url = f"https://{base_url}"
+        webhook_url = f"{base_url}/api/telegram-webhook"
+        resp = r.post(
+            f"https://api.telegram.org/bot{token}/setWebhook",
+            json={"url": webhook_url},
+            timeout=10
+        )
+        return resp.json()
 
     return app
