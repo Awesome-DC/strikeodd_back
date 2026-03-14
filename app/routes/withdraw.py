@@ -22,39 +22,70 @@ NIGERIAN_BANKS = [
 ]
 
 
-def send_telegram(message: str):
+def send_telegram_withdrawal(message: str, txn_id: str):
     token    = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
     admin_id = os.getenv("TELEGRAM_ADMIN_ID", "").strip()
 
-    # Always log to console so you can see it even without Telegram configured
     print("\n" + "="*50)
-    print("📨 TELEGRAM NOTIFICATION:")
+    print("📨 WITHDRAWAL NOTIFICATION:")
     print(message)
     print("="*50 + "\n")
 
     if not token or not admin_id or token == "your-bot-token-here":
-        logger.warning("Telegram not configured — skipping. Set TELEGRAM_BOT_TOKEN and TELEGRAM_ADMIN_ID in .env")
-        return False
+        logger.warning("Telegram not configured")
+        return None
 
     if not http_requests:
-        logger.warning("requests library not installed")
-        return False
+        return None
+
+    keyboard = {
+        "inline_keyboard": [[
+            {"text": "✅ Approve", "callback_data": f"wapprove_{txn_id}"},
+            {"text": "❌ Decline", "callback_data": f"wdecline_{txn_id}"},
+        ]]
+    }
 
     try:
         resp = http_requests.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": admin_id, "text": message, "parse_mode": "HTML"},
+            json={
+                "chat_id": admin_id,
+                "text": message,
+                "parse_mode": "HTML",
+                "reply_markup": keyboard,
+            },
             timeout=8
         )
         if resp.status_code == 200:
-            print("✅ Telegram sent successfully")
-            return True
+            return resp.json().get("result", {}).get("message_id")
         else:
             print(f"❌ Telegram error {resp.status_code}: {resp.text}")
-            return False
+            return None
     except Exception as e:
         print(f"❌ Telegram exception: {e}")
-        return False
+        return None
+
+
+def _answer_callback(token, callback_id, text):
+    if not token or not http_requests: return
+    try:
+        http_requests.post(
+            f"https://api.telegram.org/bot{token}/answerCallbackQuery",
+            json={"callback_query_id": callback_id, "text": text},
+            timeout=5
+        )
+    except: pass
+
+
+def _edit_msg(token, chat_id, msg_id, text):
+    if not token or not http_requests: return
+    try:
+        http_requests.post(
+            f"https://api.telegram.org/bot{token}/editMessageText",
+            json={"chat_id": chat_id, "message_id": msg_id, "text": text, "parse_mode": "HTML"},
+            timeout=5
+        )
+    except: pass
 
 
 @withdraw_bp.get("/banks")
@@ -111,7 +142,6 @@ def setup_bank():
 @withdraw_bp.post("/update-details")
 @jwt_required()
 def update_details():
-    """Update bank account details (requires current PIN to confirm)."""
     user_id = get_jwt_identity()
     user    = User.query.get(user_id)
     if not user:
@@ -143,7 +173,6 @@ def update_details():
 @withdraw_bp.post("/change-pin")
 @jwt_required()
 def change_pin():
-    """Change withdrawal PIN."""
     user_id = get_jwt_identity()
     user    = User.query.get(user_id)
     if not user:
@@ -197,6 +226,7 @@ def request_withdrawal():
         type="WITHDRAWAL",
         amount=-amount,
         reference=f"Withdrawal to {user.withdrawal_bank} — {user.withdrawal_account}",
+        status="PENDING",
     )
     db.session.add(txn)
     db.session.commit()
@@ -213,10 +243,78 @@ def request_withdrawal():
         f"🕐 <b>Time:</b> {now}\n"
         f"🆔 <b>Txn ID:</b> {txn.id[:8].upper()}"
     )
-    send_telegram(msg)
+    send_telegram_withdrawal(msg, txn.id)
 
     return jsonify({
         "message": "Withdrawal request submitted",
         "newBalance": user.balance,
         "transactionId": txn.id,
+    })
+
+
+@withdraw_bp.post("/telegram-webhook")
+def withdrawal_telegram_webhook():
+    """Telegram sends callback_query here when admin clicks Approve/Decline on withdrawal."""
+    data = request.get_json(silent=True) or {}
+    callback = data.get("callback_query")
+    if not callback:
+        return jsonify({"ok": True})
+
+    cb_data = callback.get("data", "")
+    msg_id  = callback.get("message", {}).get("message_id")
+    chat_id = callback.get("message", {}).get("chat", {}).get("id")
+    token   = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+
+    if cb_data.startswith("wapprove_") or cb_data.startswith("wdecline_"):
+        action = "approve" if cb_data.startswith("wapprove_") else "decline"
+        txn_id = cb_data[len("wapprove_"):] if action == "approve" else cb_data[len("wdecline_"):]
+
+        txn = Transaction.query.filter_by(id=txn_id).first()
+        if not txn:
+            _answer_callback(token, callback["id"], "Transaction not found")
+            return jsonify({"ok": True})
+
+        if txn.status != "PENDING":
+            _answer_callback(token, callback["id"], f"Already {txn.status}")
+            return jsonify({"ok": True})
+
+        user = User.query.get(txn.user_id)
+
+        if action == "approve":
+            txn.status    = "COMPLETED"
+            txn.reference = f"Withdrawal to {user.withdrawal_bank} — {user.withdrawal_account} — approved"
+            db.session.commit()
+            _edit_msg(token, chat_id, msg_id,
+                f"✅ <b>WITHDRAWAL APPROVED</b>\n\n"
+                f"₦{abs(txn.amount):,.2f} approved for {user.first_name} {user.last_name}\n"
+                f"Bank: {user.withdrawal_bank} — {user.withdrawal_account}"
+            )
+            _answer_callback(token, callback["id"], "✅ Withdrawal approved!")
+        else:
+            # Decline — refund balance
+            txn.status    = "FAILED"
+            txn.reference = f"Withdrawal to {user.withdrawal_bank} — declined"
+            user.balance  += abs(txn.amount)
+            db.session.commit()
+            _edit_msg(token, chat_id, msg_id,
+                f"❌ <b>WITHDRAWAL DECLINED</b>\n\n"
+                f"₦{abs(txn.amount):,.2f} refunded to {user.first_name} {user.last_name}'s balance."
+            )
+            _answer_callback(token, callback["id"], "❌ Withdrawal declined — balance refunded")
+
+    return jsonify({"ok": True})
+
+
+@withdraw_bp.get("/txn-status/<txn_id>")
+@jwt_required()
+def withdrawal_txn_status(txn_id):
+    """Frontend can poll this to see if withdrawal was approved/declined."""
+    user_id = get_jwt_identity()
+    txn = Transaction.query.filter_by(id=txn_id, user_id=user_id).first()
+    if not txn:
+        return jsonify({"error": "Not found"}), 404
+    user = User.query.get(user_id)
+    return jsonify({
+        "status":     txn.status,
+        "newBalance": user.balance,
     })
