@@ -13,6 +13,7 @@ from app.routes.sports import sports_bp
 from app.routes.withdraw import withdraw_bp
 from app.routes.deposit import deposit_bp
 from app.routes.crash import crash_bp
+from app.routes.referral import referral_bp
 from app.crash_engine import engine as crash_engine
 
 load_dotenv()
@@ -68,7 +69,8 @@ def create_app():
     app.register_blueprint(sports_bp,   url_prefix="/api/sports")
     app.register_blueprint(withdraw_bp, url_prefix="/api/withdraw")
     app.register_blueprint(deposit_bp,  url_prefix="/api/deposit")
-    app.register_blueprint(crash_bp,    url_prefix="/api/crash")
+    app.register_blueprint(crash_bp,      url_prefix="/api/crash")
+    app.register_blueprint(referral_bp,   url_prefix="/api/referral")
 
     # ── Auto-create tables ──
     with app.app_context():
