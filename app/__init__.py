@@ -1,5 +1,4 @@
-from flask import Flask, request, Response
-from flask_cors import CORS
+from flask import Flask, request, Response, jsonify
 from flask_jwt_extended import JWTManager
 from flask_migrate import Migrate
 from dotenv import load_dotenv
@@ -11,7 +10,7 @@ from app.routes.events import events_bp
 from app.routes.bets import bets_bp
 from app.routes.users import users_bp
 from app.routes.sports import sports_bp
-from app.routes.withdraw import withdraw_bp, withdrawal_telegram_webhook
+from app.routes.withdraw import withdraw_bp
 from app.routes.deposit import deposit_bp
 from app.routes.crash import crash_bp
 from app.crash_engine import engine as crash_engine
@@ -43,9 +42,7 @@ def create_app():
     Migrate(app, db)
     JWTManager(app)
 
-    client_url = os.getenv("CLIENT_URL", "http://localhost:5173").strip().rstrip("/")
-
-    # Manual CORS — bulletproof, handles all cases
+    # ── Manual CORS ──
     @app.before_request
     def handle_preflight():
         if request.method == "OPTIONS":
@@ -63,7 +60,7 @@ def create_app():
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
         return response
 
-    # Register blueprints
+    # ── Blueprints ──
     app.register_blueprint(auth_bp,     url_prefix="/api/auth")
     app.register_blueprint(events_bp,   url_prefix="/api/events")
     app.register_blueprint(bets_bp,     url_prefix="/api/bets")
@@ -73,34 +70,52 @@ def create_app():
     app.register_blueprint(deposit_bp,  url_prefix="/api/deposit")
     app.register_blueprint(crash_bp,    url_prefix="/api/crash")
 
-    # Auto-create all tables on startup
+    # ── Auto-create tables ──
     with app.app_context():
         db.create_all()
 
-    @app.get("/api/health")
-    def health():
-        return {"status": "ok"}
+    # ── Unified Telegram webhook (deposit + withdrawal callbacks) ──
+    @app.post("/api/telegram-webhook")
+    def unified_tg_webhook():
+        from app.routes.deposit import telegram_webhook as dep_hook
+        from app.routes.withdraw import withdrawal_telegram_webhook as wd_hook
+        data    = request.get_json(silent=True) or {}
+        cb      = data.get("callback_query", {})
+        cb_data = cb.get("data", "")
+        # Withdrawal callbacks start with w (wapprove_ / wdecline_)
+        if cb_data.startswith("w"):
+            return wd_hook()
+        # Deposit callbacks (approve_ / decline_)
+        return dep_hook()
 
+    # ── Register webhook with Telegram ──
     @app.get("/api/setup-webhook")
     def setup_webhook():
-        """Call this once to register Telegram webhook: GET /api/setup-webhook"""
-        import os
+        """Visit once after deploy: GET /api/setup-webhook"""
         try:
             import requests as r
         except ImportError:
-            return {"error": "requests not installed"}, 500
-        token    = os.getenv("TELEGRAM_BOT_TOKEN","").strip()
-        base_url = os.getenv("RAILWAY_PUBLIC_DOMAIN") or os.getenv("PUBLIC_URL","")
+            return jsonify({"error": "requests not installed"}), 500
+        token    = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+        base_url = os.getenv("PUBLIC_URL", "").strip().rstrip("/")
         if not base_url:
-            return {"error": "Set RAILWAY_PUBLIC_DOMAIN or PUBLIC_URL env var"}, 400
-        if not base_url.startswith("http"):
-            base_url = f"https://{base_url}"
+            # Try to build from Railway domain
+            domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip()
+            if domain:
+                base_url = f"https://{domain}"
+        if not base_url:
+            return jsonify({"error": "Set PUBLIC_URL env var to your Railway backend URL e.g. https://strikeoddback-production.up.railway.app"}), 400
         webhook_url = f"{base_url}/api/telegram-webhook"
         resp = r.post(
             f"https://api.telegram.org/bot{token}/setWebhook",
-            json={"url": webhook_url},
+            json={"url": webhook_url, "allowed_updates": ["callback_query", "message"]},
             timeout=10
         )
-        return resp.json()
+        return jsonify({"webhook_url": webhook_url, "telegram": resp.json()})
+
+    # ── Health check ──
+    @app.get("/api/health")
+    def health():
+        return jsonify({"status": "ok"})
 
     return app
