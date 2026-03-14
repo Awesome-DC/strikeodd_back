@@ -110,7 +110,7 @@ def initiate_deposit():
         type="DEPOSIT",
         amount=amount,
         reference=f"Deposit of ₦{amount:,.0f} — awaiting confirmation",
-        status="PENDING",
+        status="PENDING", balance_type="main",
     )
     db.session.add(txn)
     db.session.commit()
@@ -210,18 +210,26 @@ def telegram_webhook():
         user = User.query.get(txn.user_id)
 
         if action == "approve":
+            bonus = round(txn.amount * 0.10, 2)  # 10% deposit bonus
             txn.status    = "COMPLETED"
             txn.reference = f"Deposit of ₦{txn.amount:,.0f} — approved"
-            user.balance  += txn.amount
+            user.balance       += txn.amount
+            user.bonus_balance  = round((user.bonus_balance or 0) + bonus, 2)
+            # Bonus transaction record
+            db.session.add(Transaction(
+                user_id=user.id, type="DEPOSIT", amount=bonus,
+                reference=f"10% deposit bonus on ₦{txn.amount:,.0f}",
+                status="COMPLETED", balance_type="bonus"
+            ))
             db.session.commit()
 
-            # Edit TG message
             _edit_msg(token, chat_id, msg_id,
                 f"✅ <b>APPROVED</b> — ₦{txn.amount:,.2f} added to {user.first_name} {user.last_name}'s balance.\n"
-                f"New balance: ₦{user.balance:,.2f}"
+                f"Bonus: +₦{bonus:,.2f} (10%) added to bonus balance.\n"
+                f"New balance: ₦{user.balance:,.2f} | Bonus: ₦{user.bonus_balance:,.2f}"
             )
             _answer_callback(token, callback["id"], "✅ Approved!")
-            notify_user_dm(user.email, f"Your deposit of ₦{txn.amount:,.2f} has been approved! New balance: ₦{user.balance:,.2f}")
+            notify_user_dm(user.email, f"Your deposit of ₦{txn.amount:,.2f} has been approved! +₦{bonus:,.2f} bonus added.")
 
         else:  # decline
             txn.status    = "FAILED"
@@ -270,6 +278,7 @@ def deposit_status(txn_id):
 
     user = User.query.get(user_id)
     return jsonify({
-        "status":     txn.status,
-        "newBalance": user.balance if txn.status == "COMPLETED" else None,
+        "status":        txn.status,
+        "newBalance":    user.balance if txn.status == "COMPLETED" else None,
+        "newBonusBalance": user.bonus_balance if txn.status == "COMPLETED" else None,
     })
