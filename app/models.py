@@ -37,6 +37,12 @@ class User(db.Model):
     ref_code      = db.Column(db.String(20), unique=True)
     referred_by   = db.Column(db.String, db.ForeignKey("users.id"), nullable=True)
 
+    # VIP
+    total_wagered = db.Column(db.Float, default=0.0)
+
+    # Push notifications
+    push_subscription = db.Column(db.Text, nullable=True)  # JSON string
+
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     bets         = db.relationship("Bet", backref="user", lazy=True)
@@ -52,6 +58,8 @@ class User(db.Model):
             "role": self.role,
             "refCode": self.ref_code,
             "referralCount": len(self.referrals) if self.referrals else 0,
+            "totalWagered": self.total_wagered or 0,
+            "vipTier": _get_vip_tier(self.total_wagered or 0),
         }
 
 
@@ -135,6 +143,53 @@ class BetLeg(db.Model):
     odd       = db.relationship("Odd")
     def to_dict(self):
         return {"oddId": self.odd_id, "oddValue": self.odd_value, "odd": self.odd.to_dict()}
+
+
+# VIP tier helper
+VIP_TIERS = [
+    {"name": "Iron",    "min": 0,          "rakeback": 0,    "color": "#8899aa", "icon": "🔩"},
+    {"name": "Copper",  "min": 100_000,    "rakeback": 0.02, "color": "#b87333", "icon": "🟤"},
+    {"name": "Bronze",  "min": 500_000,    "rakeback": 0.03, "color": "#cd7f32", "icon": "🥉"},
+    {"name": "Silver",  "min": 2_000_000,  "rakeback": 0.05, "color": "#aaaaaa", "icon": "🥈"},
+    {"name": "Gold",    "min": 10_000_000, "rakeback": 0.07, "color": "#ffd700", "icon": "🥇"},
+    {"name": "Diamond", "min": 50_000_000, "rakeback": 0.10, "color": "#b9f2ff", "icon": "💎"},
+]
+
+def _get_vip_tier(wagered):
+    tier = VIP_TIERS[0]
+    for t in VIP_TIERS:
+        if wagered >= t["min"]:
+            tier = t
+    return tier
+
+
+class GiftCode(db.Model):
+    __tablename__ = "gift_codes"
+    id         = db.Column(db.String, primary_key=True, default=gen_id)
+    code       = db.Column(db.String(30), unique=True, nullable=False)
+    amount     = db.Column(db.Float, nullable=False)
+    balance_type = db.Column(db.String(10), default="bonus")  # bonus or main
+    max_uses   = db.Column(db.Integer, default=1)
+    uses       = db.Column(db.Integer, default=0)
+    is_active  = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    redemptions = db.relationship("GiftRedemption", backref="gift_code", lazy=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id, "code": self.code, "amount": self.amount,
+            "balanceType": self.balance_type, "maxUses": self.max_uses,
+            "uses": self.uses, "isActive": self.is_active,
+        }
+
+
+class GiftRedemption(db.Model):
+    __tablename__ = "gift_redemptions"
+    id         = db.Column(db.String, primary_key=True, default=gen_id)
+    code_id    = db.Column(db.String, db.ForeignKey("gift_codes.id"), nullable=False)
+    user_id    = db.Column(db.String, db.ForeignKey("users.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class Transaction(db.Model):
