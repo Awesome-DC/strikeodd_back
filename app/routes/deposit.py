@@ -127,9 +127,8 @@ def initiate_deposit():
     )
 
     tg_msg_id = send_telegram_with_buttons(msg, txn.id, amount, f"{user.first_name} {user.last_name}")
-
-    # Store telegram message id so we can edit it on timeout
-    txn.reference = f"{tg_msg_id or ''}|Deposit of ₦{amount:,.0f}"
+    txn.tg_message_id = tg_msg_id
+    txn.reference = f"Deposit of ₦{amount:,.0f} — awaiting confirmation"
     db.session.commit()
 
     return jsonify({
@@ -206,6 +205,11 @@ def telegram_webhook():
         if txn.status != "PENDING":
             _answer_callback(token, callback["id"], f"Already {txn.status}")
             return jsonify({"ok": True})
+
+        # Store tg_message_id if not already saved
+        if msg_id and not txn.tg_message_id:
+            txn.tg_message_id = msg_id
+            db.session.commit()
 
         user = User.query.get(txn.user_id)
 

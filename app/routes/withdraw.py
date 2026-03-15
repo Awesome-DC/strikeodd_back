@@ -278,6 +278,11 @@ def withdrawal_telegram_webhook():
             _answer_callback(token, callback["id"], f"Already {txn.status}")
             return jsonify({"ok": True})
 
+        # Store tg_message_id if not already saved
+        if msg_id and not txn.tg_message_id:
+            txn.tg_message_id = msg_id
+            db.session.commit()
+
         user = User.query.get(txn.user_id)
 
         if action == "approve":
