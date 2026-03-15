@@ -179,7 +179,8 @@ class GiftCode(db.Model):
     def to_dict(self):
         return {
             "id": self.id, "code": self.code, "amount": self.amount,
-            "balanceType": self.balance_type, "maxUses": self.max_uses,
+            "balanceType": self.balance_type,
+            "tgMessageId": self.tg_message_id, "maxUses": self.max_uses,
             "uses": self.uses, "isActive": self.is_active,
         }
 
@@ -200,12 +201,14 @@ class Transaction(db.Model):
     amount     = db.Column(db.Float, nullable=False)
     reference  = db.Column(db.String(200))
     status     = db.Column(db.String(20), default="PENDING")
-    balance_type = db.Column(db.String(10), default="main")  # "main" or "bonus"
+    balance_type = db.Column(db.String(10), default="main")
+    tg_message_id = db.Column(db.Integer, nullable=True)  # "main" or "bonus"
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     def to_dict(self):
         return {
             "id": self.id, "type": self.type, "amount": self.amount,
             "reference": self.reference, "status": self.status,
             "balanceType": self.balance_type,
+            "tgMessageId": self.tg_message_id,
             "createdAt": self.created_at.isoformat(),
         }
