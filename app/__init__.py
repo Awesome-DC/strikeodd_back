@@ -85,6 +85,35 @@ def create_app():
         except Exception as e:
             print(f"Migration note: {e}")
 
+        # ── Auto-create admin user ──
+        try:
+            from app.models import User
+            import bcrypt, random, string
+            if not User.query.filter_by(role="ADMIN").first():
+                def _gen_ref():
+                    chars = string.ascii_uppercase + string.digits
+                    while True:
+                        code = "SO" + "".join(random.choices(chars, k=6))
+                        if not User.query.filter_by(ref_code=code).first():
+                            return code
+                hashed = bcrypt.hashpw(b"Admin@Strike2026", bcrypt.gensalt()).decode()
+                admin = User(
+                    email="admin@strikeodds.com",
+                    username="strikeodds_admin",
+                    password=hashed,
+                    first_name="Strike",
+                    last_name="Admin",
+                    balance=0.0,
+                    bonus_balance=0.0,
+                    role="ADMIN",
+                    ref_code=_gen_ref(),
+                )
+                db.session.add(admin)
+                db.session.commit()
+                print("✅ Admin created: admin@strikeodds.com / Admin@Strike2026")
+        except Exception as e:
+            print(f"Admin seed note: {e}")
+
     # ── Manual CORS ──
     @app.before_request
     def handle_preflight():
