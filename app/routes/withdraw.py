@@ -290,6 +290,10 @@ def withdrawal_telegram_webhook():
                 f"Bank: {user.withdrawal_bank} — {user.withdrawal_account}"
             )
             _answer_callback(token, callback["id"], "✅ Withdrawal approved!")
+            try:
+                from app.routes.push import send_push
+                send_push(user, "✅ Withdrawal Approved!", f"₦{abs(txn.amount):,.0f} is on its way to your bank.", "/transactions")
+            except Exception: pass
         else:
             # Decline — refund balance
             txn.status    = "FAILED"
@@ -301,6 +305,10 @@ def withdrawal_telegram_webhook():
                 f"₦{abs(txn.amount):,.2f} refunded to {user.first_name} {user.last_name}'s balance."
             )
             _answer_callback(token, callback["id"], "❌ Withdrawal declined — balance refunded")
+            try:
+                from app.routes.push import send_push
+                send_push(user, "❌ Withdrawal Declined", f"₦{abs(txn.amount):,.0f} refunded to your balance.", "/transactions")
+            except Exception: pass
 
     return jsonify({"ok": True})
 

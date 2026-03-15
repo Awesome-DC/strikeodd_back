@@ -230,6 +230,15 @@ def telegram_webhook():
             )
             _answer_callback(token, callback["id"], "✅ Approved!")
             notify_user_dm(user.email, f"Your deposit of ₦{txn.amount:,.2f} has been approved! +₦{bonus:,.2f} bonus added.")
+            # Push notification
+            try:
+                from app.routes.push import send_push
+                send_push(user,
+                    "💰 Deposit Approved!",
+                    f"₦{txn.amount:,.0f} added to your balance. Bonus: +₦{bonus:,.0f}",
+                    "/transactions"
+                )
+            except Exception: pass
 
         else:  # decline
             txn.status    = "FAILED"
@@ -241,6 +250,10 @@ def telegram_webhook():
             )
             _answer_callback(token, callback["id"], "❌ Declined")
             notify_user_dm(user.email, f"Your deposit of ₦{txn.amount:,.2f} was declined. Please contact support.")
+            try:
+                from app.routes.push import send_push
+                send_push(user, "❌ Deposit Declined", f"Your deposit of ₦{txn.amount:,.0f} was declined. Contact support.", "/transactions")
+            except Exception: pass
 
     return jsonify({"ok": True})
 

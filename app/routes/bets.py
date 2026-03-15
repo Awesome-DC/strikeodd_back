@@ -122,6 +122,7 @@ def virtual_bet_result():
             if stake <= 0 or user.balance < stake:
                 return jsonify({"error": "Insufficient balance"}), 400
             user.balance = cap(user.balance - stake)
+            user.total_wagered = round((user.total_wagered or 0) + stake, 2)
             db.session.add(Transaction(
                 user_id=user_id, type="BET_PLACED", amount=-stake,
                 reference=f"{game_name} Bet — {round_id}",
