@@ -39,6 +39,7 @@ class User(db.Model):
 
     # VIP
     total_wagered = db.Column(db.Float, default=0.0)
+    is_banned     = db.Column(db.Boolean, default=False)
 
     # Push notifications
     push_subscription = db.Column(db.Text, nullable=True)  # JSON string
@@ -57,6 +58,7 @@ class User(db.Model):
             "bonusBalance": self.bonus_balance,
             "role": self.role,
             "refCode": self.ref_code,
+            "isBanned": self.is_banned or False,
             "referralCount": len(self.referrals) if self.referrals else 0,
             "totalWagered": self.total_wagered or 0,
             "vipTier": _get_vip_tier(self.total_wagered or 0),
