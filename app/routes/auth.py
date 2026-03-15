@@ -81,4 +81,6 @@ def me():
     user = User.query.get(get_jwt_identity())
     if not user:
         return jsonify({"error": "User not found"}), 404
+    if user.is_banned:
+        return jsonify({"error": "ACCOUNT_BANNED"}), 403
     return jsonify({"user": user.to_dict()})
