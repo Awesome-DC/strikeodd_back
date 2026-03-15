@@ -72,16 +72,20 @@ def create_app():
                             conn.rollback()
                             print(f"  skip users.{col}: {ex}")
 
-                # transactions.balance_type
+                # transactions columns
                 txn_cols = [c["name"] for c in inspector.get_columns("transactions")]
-                if "balance_type" not in txn_cols:
-                    try:
-                        conn.execute(text("ALTER TABLE transactions ADD COLUMN balance_type VARCHAR(10) DEFAULT 'main'"))
-                        conn.commit()
-                        print("✅ Added transactions.balance_type")
-                    except Exception as ex:
-                        conn.rollback()
-                        print(f"  skip balance_type: {ex}")
+                for col, typ in [
+                    ("balance_type",  "VARCHAR(10) DEFAULT 'main'"),
+                    ("tg_message_id", "INTEGER"),
+                ]:
+                    if col not in txn_cols:
+                        try:
+                            conn.execute(text(f"ALTER TABLE transactions ADD COLUMN {col} {typ}"))
+                            conn.commit()
+                            print(f"✅ Added transactions.{col}")
+                        except Exception as ex:
+                            conn.rollback()
+                            print(f"  skip {col}: {ex}")
         except Exception as e:
             print(f"Migration note: {e}")
 
