@@ -61,6 +61,7 @@ def create_app():
                     ("referred_by",        "VARCHAR"),
                     ("total_wagered",      "FLOAT DEFAULT 0"),
                     ("push_subscription",  "TEXT"),
+                    ("is_banned",           "BOOLEAN DEFAULT FALSE"),
                 ]
                 for col, typ in all_user_cols:
                     if col not in existing_cols:
