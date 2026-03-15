@@ -52,9 +52,6 @@ npm run db:seed        # Seed with sample data
 npm run dev
 ```
 
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:5000/api
-
 ### 5. Demo Login
 ```
 Email: demo@strikeodds.com
@@ -63,62 +60,6 @@ Password: password123
 
 ---
 
-## 📁 Project Structure
-
-```
-strikeodds/
-├── client/                  # React frontend
-│   └── src/
-│       ├── pages/           # Route pages
-│       ├── components/      # UI components
-│       │   ├── ui/          # Base components
-│       │   ├── layout/      # Layout (Navbar, Sidebar)
-│       │   └── betting/     # Betslip, OddsCard
-│       ├── context/         # Auth + Betslip state
-│       ├── services/        # API calls (axios)
-│       └── hooks/           # Custom hooks
-│
-└── server/                  # Express backend
-    ├── prisma/
-    │   └── schema.prisma    # Database schema
-    └── src/
-        ├── controllers/     # Business logic
-        ├── routes/          # API routes
-        ├── middleware/      # Auth, error handling
-        └── utils/           # Seed, helpers
-```
-
----
-
-## 🌐 API Endpoints
-
-### Auth
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | /api/auth/register | Create account |
-| POST | /api/auth/login | Login |
-| GET | /api/auth/me | Get current user |
-
-### Events
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /api/events | Get all events |
-| GET | /api/events/live | Get live events |
-| GET | /api/events/:id | Get single event |
-
-### Bets
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | /api/bets | Place a bet |
-| GET | /api/bets | Get my bets |
-
-### User
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /api/users/profile | Get profile |
-| GET | /api/users/transactions | Transaction history |
-
----
 
 ## 🚢 Deployment
 
