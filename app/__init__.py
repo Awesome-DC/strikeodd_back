@@ -15,6 +15,7 @@ from app.routes.deposit import deposit_bp
 from app.routes.crash import crash_bp
 from app.routes.referral import referral_bp
 from app.routes.giftcode import giftcode_bp
+from app.routes.admin import admin_bp
 from app.routes.push import push_bp
 from app.crash_engine import engine as crash_engine
 
@@ -113,6 +114,7 @@ def create_app():
     app.register_blueprint(crash_bp,      url_prefix="/api/crash")
     app.register_blueprint(referral_bp,   url_prefix="/api/referral")
     app.register_blueprint(giftcode_bp,   url_prefix="/api/giftcode")
+    app.register_blueprint(admin_bp,      url_prefix="/api/admin")
     app.register_blueprint(push_bp,       url_prefix="/api/push")
 
 
