@@ -179,8 +179,7 @@ class GiftCode(db.Model):
     def to_dict(self):
         return {
             "id": self.id, "code": self.code, "amount": self.amount,
-            "balanceType": self.balance_type,
-            "tgMessageId": self.tg_message_id, "maxUses": self.max_uses,
+            "balanceType": self.balance_type, "maxUses": self.max_uses,
             "uses": self.uses, "isActive": self.is_active,
         }
 
