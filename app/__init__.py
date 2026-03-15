@@ -14,6 +14,8 @@ from app.routes.withdraw import withdraw_bp
 from app.routes.deposit import deposit_bp
 from app.routes.crash import crash_bp
 from app.routes.referral import referral_bp
+from app.routes.giftcode import giftcode_bp
+from app.routes.push import push_bp
 from app.crash_engine import engine as crash_engine
 
 load_dotenv()
@@ -43,6 +45,45 @@ def create_app():
     Migrate(app, db)
     JWTManager(app)
 
+    # ── Run migrations immediately on startup ──
+    with app.app_context():
+        db.create_all()
+        try:
+            from sqlalchemy import text, inspect
+            with db.engine.connect() as conn:
+                inspector = inspect(db.engine)
+                existing_cols = [c["name"] for c in inspector.get_columns("users")]
+
+                all_user_cols = [
+                    ("bonus_balance",      "FLOAT DEFAULT 0"),
+                    ("ref_code",           "VARCHAR(20)"),
+                    ("referred_by",        "VARCHAR"),
+                    ("total_wagered",      "FLOAT DEFAULT 0"),
+                    ("push_subscription",  "TEXT"),
+                ]
+                for col, typ in all_user_cols:
+                    if col not in existing_cols:
+                        try:
+                            conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {typ}"))
+                            conn.commit()
+                            print(f"✅ Added users.{col}")
+                        except Exception as ex:
+                            conn.rollback()
+                            print(f"  skip users.{col}: {ex}")
+
+                # transactions.balance_type
+                txn_cols = [c["name"] for c in inspector.get_columns("transactions")]
+                if "balance_type" not in txn_cols:
+                    try:
+                        conn.execute(text("ALTER TABLE transactions ADD COLUMN balance_type VARCHAR(10) DEFAULT 'main'"))
+                        conn.commit()
+                        print("✅ Added transactions.balance_type")
+                    except Exception as ex:
+                        conn.rollback()
+                        print(f"  skip balance_type: {ex}")
+        except Exception as e:
+            print(f"Migration note: {e}")
+
     # ── Manual CORS ──
     @app.before_request
     def handle_preflight():
@@ -71,35 +112,10 @@ def create_app():
     app.register_blueprint(deposit_bp,  url_prefix="/api/deposit")
     app.register_blueprint(crash_bp,      url_prefix="/api/crash")
     app.register_blueprint(referral_bp,   url_prefix="/api/referral")
+    app.register_blueprint(giftcode_bp,   url_prefix="/api/giftcode")
+    app.register_blueprint(push_bp,       url_prefix="/api/push")
 
-    # ── Auto-create tables + safe column migrations ──
-    with app.app_context():
-        db.create_all()
-        # Safely add new columns if they don't exist (PostgreSQL)
-        try:
-            from sqlalchemy import text
-            with db.engine.connect() as conn:
-                # Check and add new User columns
-                for col, typ in [
-                    ("bonus_balance", "FLOAT DEFAULT 0"),
-                    ("ref_code",      "VARCHAR(20)"),
-                    ("referred_by",   "VARCHAR"),
-                ]:
-                    try:
-                        conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {typ}"))
-                        conn.commit()
-                        print(f"✅ Added column users.{col}")
-                    except Exception:
-                        conn.rollback()  # column already exists — fine
-                # Check and add balance_type to transactions
-                try:
-                    conn.execute(text("ALTER TABLE transactions ADD COLUMN balance_type VARCHAR(10) DEFAULT 'main'"))
-                    conn.commit()
-                    print("✅ Added column transactions.balance_type")
-                except Exception:
-                    conn.rollback()
-        except Exception as e:
-            print(f"Migration note: {e}")
+
 
     # ── Unified Telegram webhook (deposit + withdrawal callbacks) ──
     @app.post("/api/telegram-webhook")
