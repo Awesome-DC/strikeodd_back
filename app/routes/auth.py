@@ -69,6 +69,8 @@ def login():
     user = User.query.filter_by(email=data.get("email")).first()
     if not user or not bcrypt.checkpw(data.get("password", "").encode(), user.password.encode()):
         return jsonify({"error": "Invalid credentials"}), 401
+    if user.is_banned:
+        return jsonify({"error": "ACCOUNT_BANNED"}), 403
     token = create_access_token(identity=user.id)
     return jsonify({"token": token, "user": user.to_dict()})
 

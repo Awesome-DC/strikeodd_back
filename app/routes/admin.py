@@ -210,6 +210,7 @@ def get_users():
             "firstName": u.first_name, "lastName": u.last_name,
             "balance": u.balance, "bonusBalance": u.bonus_balance or 0,
             "totalWagered": u.total_wagered or 0,
+            "isBanned": u.is_banned or False,
             "createdAt": u.created_at.isoformat(),
         } for u in users],
         "total": total, "page": page, "pages": -(-total//limit)
@@ -243,31 +244,34 @@ def credit_user(user_id):
     return jsonify({"ok": True, "newBalance": user.balance, "newBonusBalance": user.bonus_balance or 0})
 
 
-@admin_bp.delete("/users/<user_id>")
+@admin_bp.post("/users/<user_id>/ban")
 @jwt_required()
-def delete_user(user_id):
+def ban_user(user_id):
     _, err = require_admin()
     if err: return err
 
     user = User.query.get(user_id)
     if not user: return jsonify({"error": "User not found"}), 404
-    if user.role == "ADMIN": return jsonify({"error": "Cannot delete admin accounts"}), 400
+    if user.role == "ADMIN": return jsonify({"error": "Cannot ban admin accounts"}), 400
 
-    username = user.username
-    email    = user.email
-
-    # Delete related records first
-    GiftRedemption.query.filter_by(user_id=user_id).delete()
-    for bet in Bet.query.filter_by(user_id=user_id).all():
-        BetLeg.query.filter_by(bet_id=bet.id).delete()
-    Bet.query.filter_by(user_id=user_id).delete()
-    Transaction.query.filter_by(user_id=user_id).delete()
-    # Unlink referrals
-    User.query.filter_by(referred_by=user_id).update({"referred_by": None})
-    db.session.delete(user)
+    user.is_banned = True
     db.session.commit()
+    _tg_send(f"🚫 <b>User Banned</b>\n👤 @{user.username} ({user.email})\nBanned by admin.")
+    return jsonify({"ok": True})
 
-    _tg_send(f"🗑️ <b>User Deleted</b>\n👤 @{username} ({email})\nDeleted by admin.")
+
+@admin_bp.post("/users/<user_id>/unban")
+@jwt_required()
+def unban_user(user_id):
+    _, err = require_admin()
+    if err: return err
+
+    user = User.query.get(user_id)
+    if not user: return jsonify({"error": "User not found"}), 404
+
+    user.is_banned = False
+    db.session.commit()
+    _tg_send(f"✅ <b>User Unbanned</b>\n👤 @{user.username} ({user.email})\nUnbanned by admin.")
     return jsonify({"ok": True})
 
 # ── All transactions ─────────────────────────────────────────
