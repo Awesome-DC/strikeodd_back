@@ -76,6 +76,17 @@ with app.app_context():
         db.session.flush()
         db.session.add(Transaction(user_id=user.id, type="DEPOSIT", amount=1000, reference="Welcome bonus"))
 
+    # Admin user
+    if not User.query.filter_by(email="admin@strikeodds.com").first():
+        hashed = bcrypt.hashpw(b"Admin@Strike2026", bcrypt.gensalt()).decode()
+        admin = User(
+            email="admin@strikeodds.com", username="strikeodds_admin",
+            password=hashed, first_name="Strike", last_name="Admin",
+            balance=0, role="ADMIN"
+        )
+        db.session.add(admin)
+
     db.session.commit()
     print("✅ Database seeded!")
     print("📧 Demo login: demo@strikeodds.com / password123")
+    print("🔐 Admin login: admin@strikeodds.com / Admin@Strike2026")
